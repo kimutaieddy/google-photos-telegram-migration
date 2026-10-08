@@ -1,0 +1,34 @@
+# Environment variables & secrets
+.env
+*.session
+*.session-journal
+*.session.tmp
+
+# Database & SQLite files
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# Temporary & Download Directories
+downloads/
+temp/
+staging/
+
+# Python cache & virtualenv
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs
+logs/
+*.log
+

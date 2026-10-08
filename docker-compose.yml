@@ -1,0 +1,18 @@
+services:
+  photo-migration:
+    build: .
+    container_name: gphotos_telegram_migration
+    restart: "no"
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./.env:/app/.env:ro
+    # Protect host and existing n8n container by bounding resources
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4096M
+    command: ["--help"]
+
