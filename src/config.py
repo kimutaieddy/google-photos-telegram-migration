@@ -32,8 +32,13 @@ class Config:
     BOT_TOKEN: Optional[str] = os.getenv("BOT_TOKEN") or None
 
     # Storage paths
-    DATA_DIR: Path = Path(os.getenv("DATA_DIR", PROJECT_ROOT / "data")).resolve()
-    TEMP_DIR: Path = Path(os.getenv("TEMP_DIR", DATA_DIR / "temp")).resolve()
+    _raw_data_dir = os.getenv("DATA_DIR", "data")
+    DATA_DIR: Path = (
+        (PROJECT_ROOT / _raw_data_dir).resolve()
+        if not Path(_raw_data_dir).is_absolute()
+        else Path(_raw_data_dir).resolve()
+    )
+    TEMP_DIR: Path = DATA_DIR / "temp"
     DB_PATH: Path = DATA_DIR / "migration.db"
 
     # Disk space threshold in MB (stop/pause if free space is below this)

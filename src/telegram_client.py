@@ -36,9 +36,13 @@ class TelegramArchiver:
         """Start the Telethon client and resolve target channel entity."""
         await self.client.connect()
         if not await self.client.is_user_authorized():
-            raise PermissionError(
-                "Telegram client is not authorized. Please run 'python scripts/generate_session.py' first."
-            )
+            if config.BOT_TOKEN:
+                logger.info("Authorizing Telethon client via BOT_TOKEN...")
+                await self.client.start(bot_token=config.BOT_TOKEN)
+            else:
+                raise PermissionError(
+                    "Telegram client is not authorized. Please provide BOT_TOKEN or run 'python scripts/generate_session.py'."
+                )
         # Resolve target channel / chat
         self._target_entity = await self.client.get_input_entity(config.TELEGRAM_CHANNEL_ID)
         me = await self.client.get_me()
