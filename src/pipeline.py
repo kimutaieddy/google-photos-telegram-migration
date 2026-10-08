@@ -13,6 +13,7 @@ from src.database import Database
 from src.metadata import extract_full_metadata, compute_file_sha256
 from src.telegram_client import TelegramArchiver
 from src.downloader import download_file_resumable, assert_disk_space_available
+from src.gdrive import GoogleDriveManager
 
 logger = logging.getLogger(__name__)
 
@@ -211,4 +212,47 @@ class MigrationPipeline:
 
         finally:
             await self.close()
+
+    async def run_from_gdrive(self, folder_name: str = "Takeout") -> None:
+        """
+        Automatically discover and process Takeout archives directly from Google Drive.
+        Downloads each 2 GB ZIP sequentially, uploads to Telegram, and removes it locally.
+        """
+        drive_mgr = GoogleDriveManager()
+        drive_mgr.authenticate()
+        archives = drive_mgr.list_takeout_archives(folder_name=folder_name)
+
+        if not archives:
+            logger.warning(f"No archives found in Google Drive folder: '{folder_name}'")
+            return
+
+        await self.initialize()
+        try:
+            for idx, arch in enumerate(archives, 1):
+                arch_id = self.db.get_or_create_archive(
+                    archive_name=arch["name"],
+                    size_bytes=arch["size_bytes"],
+                )
+                arch_info = self.db.get_archive(arch_id)
+                if arch_info and arch_info["status"] == "COMPLETED":
+                    logger.info(f"Archive {arch['name']} is already completed. Skipping.")
+                    continue
+
+                dest_zip = config.TEMP_DIR / arch["name"]
+                size_mb = arch["size_bytes"] / (1024 * 1024)
+                logger.info(
+                    f"Downloading Drive archive [{idx}/{len(archives)}]: {arch['name']} ({size_mb:.1f} MB)..."
+                )
+
+                drive_mgr.download_archive(
+                    file_id=arch["id"],
+                    destination_path=dest_zip,
+                    expected_size_mb=int(size_mb) + 100,
+                )
+
+                await self.process_zip_archive(dest_zip, arch_id, delete_zip_after=True)
+
+        finally:
+            await self.close()
+
 

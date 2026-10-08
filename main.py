@@ -49,13 +49,24 @@ Examples:
         help="File containing one Google Takeout signed download URL per line",
     )
     parser.add_argument(
+        "--gdrive",
+        action="store_true",
+        help="Automatically fetch Takeout archives directly from Google Drive",
+    )
+    parser.add_argument(
+        "--gdrive-folder",
+        type=str,
+        default="Takeout",
+        help="Name of the Google Drive folder to scan (default: 'Takeout')",
+    )
+    parser.add_argument(
         "--delete-after-upload",
         action="store_true",
-        help="Delete each Takeout ZIP archive after all its contents are uploaded (saves VPS disk)",
+        help="Delete each Takeout ZIP archive after all its contents are uploaded (saves disk)",
     )
     args = parser.parse_args()
 
-    if not args.dir and not args.urls:
+    if not args.dir and not args.urls and not args.gdrive:
         parser.print_help()
         sys.exit(1)
 
@@ -81,6 +92,10 @@ Examples:
             urls = [line.strip() for line in f if line.strip() and not line.startswith("#")]
         logger.info(f"Starting sequential migration for {len(urls)} Takeout chunk URLs")
         await pipeline.run_from_urls(urls)
+
+    elif args.gdrive:
+        logger.info(f"Connecting to Google Drive to scan folder: '{args.gdrive_folder}'")
+        await pipeline.run_from_gdrive(folder_name=args.gdrive_folder)
 
     logger.info("Migration run finished.")
 

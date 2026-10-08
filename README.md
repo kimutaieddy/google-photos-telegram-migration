@@ -37,11 +37,23 @@ python scripts/run_poc.py
 ```
 
 ### 4. Run Migration
-```bash
-# From a directory of 2 GB Takeout ZIPs:
-python main.py --dir ./data/takeout --delete-after-upload
 
-# From a list of download URLs:
+#### Option A: Direct from Google Drive (Recommended & Fully Automated)
+```bash
+# 1. One-time OAuth authentication (creates data/gdrive_token.json)
+python scripts/auth_gdrive.py
+
+# 2. Automated run: discovers archives, downloads 2 GB chunk, uploads to Telegram, and deletes locally
+python main.py --gdrive
+```
+
+#### Option B: From a local folder of Takeout ZIPs
+```bash
+python main.py --dir ./data/takeout --delete-after-upload
+```
+
+#### Option C: From a list of download URLs
+```bash
 python main.py --urls ./data/takeout_urls.txt
 ```
 
