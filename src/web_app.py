@@ -160,3 +160,4 @@ async def get_full_photo(photo_id: int):
 STATIC_DIR = config.PROJECT_ROOT / "web" / "static"
 if STATIC_DIR.exists():
     app.mount("/", StaticFiles(directory=str(STATIC_DIR), html=True), name="static")
+

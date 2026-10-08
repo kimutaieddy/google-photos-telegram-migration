@@ -297,3 +297,4 @@ navAlbums.onclick = async () => {
 // Initial Boot
 initSidebarAndFilters();
 loadPhotos();
+

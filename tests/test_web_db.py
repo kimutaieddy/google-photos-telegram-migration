@@ -81,3 +81,4 @@ def test_query_and_count_media_items(tmp_path):
     year_list = [y["year"] for y in years]
     assert "2023" in year_list
     assert "2022" in year_list
+
