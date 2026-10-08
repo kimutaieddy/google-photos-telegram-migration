@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-[#0a0a0c] text-[#f4f4f6]">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>CloudWest Photos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
+          },
+          colors: {
+            surface: {
+              DEFAULT: '#121215',
+              subtle: '#18181c',
+              border: '#242429',
+              hover: '#202026',
+            },
+            accent: {
+              DEFAULT: '#3b82f6',
+              hover: '#2563eb',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Custom scrollbars & smooth transitions */
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #0a0a0c; }
+    ::-webkit-scrollbar-thumb { background: #26262b; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+    .grid-img {
+      transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.2s ease;
+    }
+    .grid-item:hover .grid-img {
+      transform: scale(1.02);
+    }
+  </style>
+</head>
+<body class="h-full flex flex-col font-sans antialiased select-none text-neutral-200">
+
+  <!-- Header / Navigation Bar -->
+  <header class="h-14 border-b border-surface-border bg-surface/90 backdrop-blur-md px-4 flex items-center justify-between sticky top-0 z-30">
+    <div class="flex items-center space-x-6">
+      <div class="flex items-center space-x-2.5">
+        <div class="w-7 h-7 rounded-md bg-blue-600 flex items-center justify-center shadow-sm">
+          <svg class="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+          </svg>
+        </div>
+        <span class="font-medium text-sm text-neutral-100 tracking-tight">CloudWest</span>
+      </div>
+
+      <nav class="hidden md:flex items-center space-x-1 text-xs font-medium">
+        <button id="nav-photos" class="px-3 py-1.5 rounded-md bg-neutral-800 text-neutral-100 transition-colors">Photos</button>
+        <button id="nav-albums" class="px-3 py-1.5 rounded-md text-neutral-400 hover:text-neutral-200 hover:bg-neutral-800/50 transition-colors">Albums</button>
+      </nav>
+    </div>
+
+    <!-- Search input -->
+    <div class="flex items-center space-x-3 w-1/3 max-w-sm">
+      <div class="relative w-full">
+        <svg class="w-4 h-4 text-neutral-500 absolute left-2.5 top-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+        </svg>
+        <input 
+          id="search-input" 
+          type="text" 
+          placeholder="Search by filename, album..." 
+          class="w-full bg-surface-subtle border border-surface-border text-xs rounded-md pl-8 pr-3 py-1.5 text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-neutral-500 transition-colors"
+        >
+      </div>
+      <div id="stats-badge" class="hidden sm:block text-[11px] font-mono text-neutral-500 whitespace-nowrap">
+        0 items
+      </div>
+    </div>
+  </header>
+
+  <!-- Filter & Timeline Subbar -->
+  <div id="subbar" class="h-10 border-b border-surface-border bg-surface-subtle/50 px-4 flex items-center space-x-2 overflow-x-auto text-xs scrollbar-none z-20">
+    <span class="text-neutral-500 font-medium text-[11px] uppercase tracking-wider mr-1">Filter:</span>
+    <button data-filter="all" class="subbar-tag active px-2.5 py-1 rounded bg-neutral-800 text-neutral-200 font-medium">All</button>
+    <div id="timeline-years" class="flex items-center space-x-1.5">
+      <!-- Injected dynamically -->
+    </div>
+  </div>
+
+  <!-- Main Grid View -->
+  <main class="flex-1 overflow-y-auto px-4 py-6" id="main-scroll-container">
+    <!-- Photos Grid Container -->
+    <div id="photos-section">
+      <div id="photos-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+        <!-- Photo thumbnails injected here -->
+      </div>
+      <div id="loading-indicator" class="py-12 flex justify-center items-center text-xs text-neutral-500">
+        <span class="animate-pulse">Loading library from Telegram...</span>
+      </div>
+      <div id="empty-state" class="hidden py-24 text-center">
+        <p class="text-sm text-neutral-400">No photos found matching your query.</p>
+      </div>
+    </div>
+
+    <!-- Albums Section (Hidden by default) -->
+    <div id="albums-section" class="hidden">
+      <div id="albums-grid" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <!-- Albums injected here -->
+      </div>
+    </div>
+  </main>
+
+  <!-- Fullscreen Modal / Lightbox -->
+  <div id="lightbox" class="fixed inset-0 bg-black/95 z-50 hidden flex flex-col md:flex-row backdrop-blur-sm">
+    <!-- Top toolbar on mobile / Left on desktop -->
+    <button id="lightbox-close" class="absolute top-4 right-4 z-50 p-2 rounded-full bg-neutral-900/80 text-neutral-400 hover:text-white transition-colors">
+      <svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+      </svg>
+    </button>
+
+    <!-- Main Media Display -->
+    <div class="flex-1 flex items-center justify-center p-4 relative overflow-hidden">
+      <button id="btn-prev" class="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-neutral-900/60 hover:bg-neutral-900 text-neutral-300 hover:text-white transition-colors">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+        </svg>
+      </button>
+
+      <div id="media-viewport" class="max-w-full max-h-full flex items-center justify-center">
+        <img id="lightbox-img" class="max-w-full max-h-[85vh] object-contain rounded shadow-2xl transition-opacity duration-300" src="" alt="">
+        <video id="lightbox-video" class="max-w-full max-h-[85vh] object-contain rounded shadow-2xl hidden" controls autoplay playsinline></video>
+      </div>
+
+      <button id="btn-next" class="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-neutral-900/60 hover:bg-neutral-900 text-neutral-300 hover:text-white transition-colors">
+        <svg class="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+        </svg>
+      </button>
+    </div>
+
+    <!-- Right Sidebar Metadata Inspector (ui-taste craft: deliberate hierarchy, tabular numerals) -->
+    <div id="metadata-panel" class="w-full md:w-80 bg-surface border-t md:border-t-0 md:border-l border-surface-border p-5 flex flex-col justify-between overflow-y-auto">
+      <div>
+        <div class="flex items-center justify-between pb-3 border-b border-surface-border">
+          <h3 class="text-xs font-semibold uppercase tracking-wider text-neutral-400">Item Details</h3>
+          <a id="btn-download" href="#" target="_blank" download class="text-xs text-blue-400 hover:text-blue-300 flex items-center space-x-1">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/>
+            </svg>
+            <span>Original</span>
+          </a>
+        </div>
+
+        <div class="mt-4 space-y-3.5 text-xs">
+          <div>
+            <div class="text-[11px] text-neutral-500 uppercase tracking-wide">Filename</div>
+            <div id="meta-filename" class="font-mono text-neutral-200 break-all select-text mt-0.5">-</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-neutral-500 uppercase tracking-wide">Date & Time</div>
+            <div id="meta-date" class="tabular-nums text-neutral-200 mt-0.5">-</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-neutral-500 uppercase tracking-wide">Album</div>
+            <div id="meta-album" class="text-neutral-200 mt-0.5">-</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-neutral-500 uppercase tracking-wide">Size</div>
+            <div id="meta-size" class="tabular-nums text-neutral-300 font-mono mt-0.5">-</div>
+          </div>
+          <div>
+            <div class="text-[11px] text-neutral-500 uppercase tracking-wide">Verified Checksum</div>
+            <div id="meta-sha256" class="font-mono text-[10px] text-neutral-400 break-all select-text mt-0.5">-</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 pt-4 border-t border-surface-border text-[11px] text-neutral-500 flex items-center justify-between">
+        <span class="flex items-center space-x-1.5">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          <span>Telegram Stored</span>
+        </span>
+        <span id="meta-msgid" class="font-mono text-[10px]">#0</span>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

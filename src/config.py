@@ -15,6 +15,8 @@ load_dotenv(PROJECT_ROOT / ".env")
 class Config:
     """System configuration singleton."""
 
+    PROJECT_ROOT: Path = PROJECT_ROOT
+
     # Telegram MTProto Credentials
     TELEGRAM_API_ID: int = int(os.getenv("TELEGRAM_API_ID", "0"))
     TELEGRAM_API_HASH: str = os.getenv("TELEGRAM_API_HASH", "")
@@ -39,7 +41,13 @@ class Config:
         else Path(_raw_data_dir).resolve()
     )
     TEMP_DIR: Path = DATA_DIR / "temp"
+    THUMBNAIL_DIR: Path = DATA_DIR / "thumbnails"
     DB_PATH: Path = DATA_DIR / "migration.db"
+
+    # Web Interface
+    WEB_PORT: int = int(os.getenv("WEB_PORT", "8055"))
+    WEB_HOST: str = os.getenv("WEB_HOST", "0.0.0.0")
+    WEB_AUTH_TOKEN: str = os.getenv("WEB_AUTH_TOKEN", "")
 
     # Disk space threshold in MB (stop/pause if free space is below this)
     MIN_DISK_FREE_MB: int = int(os.getenv("MIN_DISK_FREE_MB", "1500"))
@@ -59,6 +67,7 @@ class Config:
         """Create necessary data and temp directories if they do not exist."""
         cls.DATA_DIR.mkdir(parents=True, exist_ok=True)
         cls.TEMP_DIR.mkdir(parents=True, exist_ok=True)
+        cls.THUMBNAIL_DIR.mkdir(parents=True, exist_ok=True)
 
     @classmethod
     def validate_telegram_config(cls) -> None:

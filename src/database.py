@@ -271,3 +271,123 @@ class Database:
                 stats.update(dict(arch_row))
             return stats
 
+    # -------------------------------------------------------------------------
+    # Web Library Queries
+    # -------------------------------------------------------------------------
+    def query_media_items(
+        self,
+        album: Optional[str] = None,
+        search: Optional[str] = None,
+        year: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> List[Dict[str, Any]]:
+        """Query uploaded/verified media items with filtering and pagination."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            conditions = ["status IN ('UPLOADED', 'VERIFIED')"]
+            params: List[Any] = []
+
+            if album:
+                conditions.append("album = ?")
+                params.append(album)
+
+            if search:
+                conditions.append("(filename LIKE ? OR description LIKE ? OR album LIKE ?)")
+                wildcard = f"%{search}%"
+                params.extend([wildcard, wildcard, wildcard])
+
+            if year:
+                conditions.append("exif_timestamp LIKE ?")
+                params.append(f"{year}%")
+
+            where_clause = " AND ".join(conditions)
+            query = f"""
+                SELECT id, relative_path, filename, size_bytes, sha256,
+                       mime_type, exif_timestamp, gps_lat, gps_lon, album,
+                       description, telegram_message_id, telegram_file_id,
+                       status, uploaded_at
+                FROM media_items
+                WHERE {where_clause}
+                ORDER BY COALESCE(exif_timestamp, uploaded_at, '1970-01-01') DESC, id DESC
+                LIMIT ? OFFSET ?
+            """
+            params.extend([limit, offset])
+            cursor.execute(query, params)
+            return [dict(row) for row in cursor.fetchall()]
+
+    def count_media_items(
+        self,
+        album: Optional[str] = None,
+        search: Optional[str] = None,
+        year: Optional[str] = None,
+    ) -> int:
+        """Count total media items matching filters."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            conditions = ["status IN ('UPLOADED', 'VERIFIED')"]
+            params: List[Any] = []
+
+            if album:
+                conditions.append("album = ?")
+                params.append(album)
+
+            if search:
+                conditions.append("(filename LIKE ? OR description LIKE ? OR album LIKE ?)")
+                wildcard = f"%{search}%"
+                params.extend([wildcard, wildcard, wildcard])
+
+            if year:
+                conditions.append("exif_timestamp LIKE ?")
+                params.append(f"{year}%")
+
+            where_clause = " AND ".join(conditions)
+            cursor.execute(f"SELECT COUNT(*) FROM media_items WHERE {where_clause}", params)
+            return cursor.fetchone()[0]
+
+    def get_media_item(self, item_id: int) -> Optional[Dict[str, Any]]:
+        """Get single media item by ID."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM media_items WHERE id = ?", (item_id,))
+            row = cursor.fetchone()
+            return dict(row) if row else None
+
+    def get_albums_summary(self) -> List[Dict[str, Any]]:
+        """List distinct albums with photo counts and latest cover photo."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    album,
+                    COUNT(*) as count,
+                    MAX(id) as cover_item_id,
+                    MAX(COALESCE(exif_timestamp, uploaded_at)) as latest_date
+                FROM media_items
+                WHERE status IN ('UPLOADED', 'VERIFIED') AND album IS NOT NULL AND album != ''
+                GROUP BY album
+                ORDER BY count DESC, album ASC
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
+    def get_years_summary(self) -> List[Dict[str, Any]]:
+        """List available years based on timestamps."""
+        with self.get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    SUBSTR(COALESCE(exif_timestamp, uploaded_at), 1, 4) as year,
+                    COUNT(*) as count
+                FROM media_items
+                WHERE status IN ('UPLOADED', 'VERIFIED')
+                  AND COALESCE(exif_timestamp, uploaded_at) IS NOT NULL
+                  AND SUBSTR(COALESCE(exif_timestamp, uploaded_at), 1, 4) GLOB '[1-2][0-9][0-9][0-9]'
+                GROUP BY year
+                ORDER BY year DESC
+                """
+            )
+            return [dict(row) for row in cursor.fetchall()]
+
