@@ -60,6 +60,12 @@ Examples:
         help="Name of the Google Drive folder to scan (default: 'Takeout')",
     )
     parser.add_argument(
+        "--prefix",
+        type=str,
+        default="takeout-20261008",
+        help="Prefix filter for Takeout archives to process (default: 'takeout-20261008')",
+    )
+    parser.add_argument(
         "--delete-after-upload",
         action="store_true",
         help="Delete each Takeout ZIP archive after all its contents are uploaded (saves disk)",
@@ -94,8 +100,8 @@ Examples:
         await pipeline.run_from_urls(urls)
 
     elif args.gdrive:
-        logger.info(f"Connecting to Google Drive to scan folder: '{args.gdrive_folder}'")
-        await pipeline.run_from_gdrive(folder_name=args.gdrive_folder)
+        logger.info(f"Connecting to Google Drive to scan folder: '{args.gdrive_folder}' (prefix filter: '{args.prefix}')")
+        await pipeline.run_from_gdrive(folder_name=args.gdrive_folder, prefix=args.prefix)
 
     logger.info("Migration run finished.")
 

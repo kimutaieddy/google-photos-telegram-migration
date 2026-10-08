@@ -213,14 +213,14 @@ class MigrationPipeline:
         finally:
             await self.close()
 
-    async def run_from_gdrive(self, folder_name: str = "Takeout") -> None:
+    async def run_from_gdrive(self, folder_name: str = "Takeout", prefix: Optional[str] = None) -> None:
         """
         Automatically discover and process Takeout archives directly from Google Drive.
         Downloads each 2 GB ZIP sequentially, uploads to Telegram, and removes it locally.
         """
         drive_mgr = GoogleDriveManager()
         drive_mgr.authenticate()
-        archives = drive_mgr.list_takeout_archives(folder_name=folder_name)
+        archives = drive_mgr.list_takeout_archives(folder_name=folder_name, prefix=prefix)
 
         if not archives:
             logger.warning(f"No archives found in Google Drive folder: '{folder_name}'")

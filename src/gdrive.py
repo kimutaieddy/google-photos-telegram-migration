@@ -30,8 +30,30 @@ class GoogleDriveManager:
         credentials_path: Optional[Path] = None,
     ):
         self.token_path = token_path or (config.DATA_DIR / "gdrive_token.json")
-        self.credentials_path = credentials_path or (config.DATA_DIR / "credentials.json")
+        self.credentials_path = self._locate_credentials(credentials_path)
         self.service = None
+
+    def _locate_credentials(self, explicit_path: Optional[Path]) -> Path:
+        """Locate credentials JSON file across candidate locations."""
+        if explicit_path and explicit_path.exists():
+            return explicit_path
+
+        candidates = [
+            config.DATA_DIR / "credentials.json",
+            Path(__file__).resolve().parent.parent / "credentials.json",
+        ]
+        # Check for client_secret*.json files in project root
+        root = Path(__file__).resolve().parent.parent
+        for f in root.glob("*client_secret*.json"):
+            candidates.insert(0, f)
+        for f in config.DATA_DIR.glob("*client_secret*.json"):
+            candidates.insert(0, f)
+
+        for c in candidates:
+            if c.exists():
+                return c
+
+        return config.DATA_DIR / "credentials.json"
 
     def authenticate(self, interactive: bool = True) -> Any:
         """
@@ -47,14 +69,15 @@ class GoogleDriveManager:
                 logger.info("Refreshing expired Google Drive credentials...")
                 creds.refresh(Request())
             elif interactive:
-                if not self.credentials_path.exists():
-                    raise FileNotFoundError(
-                        f"Google OAuth client secrets file not found at: {self.credentials_path}\n"
-                        "Please place your 'credentials.json' from Google Cloud Console into the 'data/' folder."
-                    )
-                logger.info("Initiating Google Drive OAuth flow in local browser...")
+                print(f"Loading OAuth credentials from: {self.credentials_path}", flush=True)
                 flow = InstalledAppFlow.from_client_secrets_file(str(self.credentials_path), SCOPES)
-                creds = flow.run_local_server(port=0)
+                flow.redirect_uri = "http://localhost:8080/"
+                auth_url, _ = flow.authorization_url(prompt="consent", access_type="offline")
+                print("\n=======================================================", flush=True)
+                print("PLEASE OPEN THIS URL IN YOUR BROWSER TO AUTHORIZE:", flush=True)
+                print(f"{auth_url}", flush=True)
+                print("=======================================================\n", flush=True)
+                creds = flow.run_local_server(port=8080, open_browser=True, prompt="consent", access_type="offline")
 
                 # Save token for future automatic execution
                 self.token_path.parent.mkdir(parents=True, exist_ok=True)
@@ -73,9 +96,10 @@ class GoogleDriveManager:
             self.authenticate()
         return self.service
 
-    def list_takeout_archives(self, folder_name: str = "Takeout") -> List[Dict[str, Any]]:
+    def list_takeout_archives(self, folder_name: str = "Takeout", prefix: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Search for the specified folder in Google Drive and list all Takeout ZIP files inside it.
+        Optionally filter by archive filename prefix (e.g. 'takeout-20261008').
         """
         drive = self.get_service()
 
@@ -107,9 +131,12 @@ class GoogleDriveManager:
             ).execute()
 
             for f in file_res.get("files", []):
+                name = f["name"]
+                if prefix and not name.startswith(prefix):
+                    continue
                 items.append({
                     "id": f["id"],
-                    "name": f["name"],
+                    "name": name,
                     "size_bytes": int(f.get("size", 0)),
                     "md5": f.get("md5Checksum"),
                     "created_at": f.get("createdTime"),
@@ -156,3 +183,4 @@ class GoogleDriveManager:
 
         logger.info(f"Successfully downloaded Drive file to {destination_path.name}")
         return destination_path
+

@@ -3,6 +3,9 @@
 *.session
 *.session-journal
 *.session.tmp
+client_secret*.json
+credentials*.json
+*token*.json
 
 # Database & SQLite files
 *.db
