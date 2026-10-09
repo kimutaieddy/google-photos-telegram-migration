@@ -8,6 +8,7 @@ import random
 from pathlib import Path
 from typing import Optional, Dict, Any, Callable
 from telethon import TelegramClient, errors
+from telethon.network.connection import ConnectionTcpIntermediate
 from telethon.sessions import StringSession
 from src.config import config
 from src.metadata import MediaMetadata
@@ -29,12 +30,17 @@ class TelegramArchiver:
             self.session,
             config.TELEGRAM_API_ID,
             config.TELEGRAM_API_HASH,
+            connection=ConnectionTcpIntermediate,
         )
         self._target_entity = None
 
     async def connect(self) -> None:
         """Start the Telethon client and resolve target channel entity."""
-        await self.client.connect()
+        await asyncio.wait_for(self._do_connect(), timeout=35.0)
+
+    async def _do_connect(self) -> None:
+        if not self.client.is_connected():
+            await self.client.connect()
         if not await self.client.is_user_authorized():
             if config.BOT_TOKEN:
                 logger.info("Authorizing Telethon client via BOT_TOKEN...")
@@ -88,19 +94,54 @@ class TelegramArchiver:
 
         while retries < config.MAX_RETRIES:
             try:
+                # Ensure client is connected before attempting send
+                if not self.client.is_connected() or not self._target_entity:
+                    logger.info("Telethon disconnected; reconnecting...")
+                    try:
+                        await self.connect()
+                    except Exception as ce:
+                        logger.warning(f"Reconnection failed ({ce}), re-creating TelethonClient...")
+                        try:
+                            await self.client.disconnect()
+                        except Exception:
+                            pass
+                        from telethon.network import ConnectionTcpIntermediate
+                        self.client = TelegramClient(
+                            self.session,
+                            config.TELEGRAM_API_ID,
+                            config.TELEGRAM_API_HASH,
+                            connection=ConnectionTcpIntermediate,
+                        )
+                        await self.connect()
+
                 # Add organic jitter delay to prevent rate limit triggers
                 jitter = random.uniform(0.1, 0.6)
                 await asyncio.sleep(config.UPLOAD_DELAY_SECONDS + jitter)
 
-                # Send strictly as document (force_document=True)
-                # to prevent Telegram from transcoding or stripping metadata
-                msg = await self.client.send_file(
-                    self._target_entity,
-                    file=str(file_path),
-                    caption=caption,
-                    parse_mode="html",
-                    force_document=True,
-                    progress_callback=progress_callback,
+                # Upload file: Use parallel MTProto chunk requests for all files with 128KB chunks
+                upload_timeout = max(1200, int(file_size / (5 * 1024)))
+                from src.parallel_uploader import upload_file_parallel
+                file_handle = await asyncio.wait_for(
+                    upload_file_parallel(
+                        self.client,
+                        file_path,
+                        part_size_kb=128,
+                        max_workers=4,
+                        progress_callback=progress_callback,
+                    ),
+                    timeout=upload_timeout,
+                )
+
+                # Send pre-uploaded file handle strictly as document
+                msg = await asyncio.wait_for(
+                    self.client.send_file(
+                        self._target_entity,
+                        file=file_handle,
+                        caption=caption,
+                        parse_mode="html",
+                        force_document=True,
+                    ),
+                    timeout=60,
                 )
 
                 file_id = None
@@ -118,10 +159,15 @@ class TelegramArchiver:
                 logger.warning(f"Telegram FloodWait encountered: sleeping for {e.seconds + 2} seconds...")
                 await asyncio.sleep(e.seconds + 2)
                 retries += 1
-            except (errors.RPCError, ConnectionError, TimeoutError) as e:
+            except (errors.RPCError, ConnectionError, TimeoutError, OSError, asyncio.TimeoutError) as e:
                 retries += 1
-                backoff = min(60, 2**retries)
+                backoff = min(30, 2**retries)
                 logger.warning(f"Transient error uploading {file_path.name}: {e}. Retrying in {backoff}s...")
+                try:
+                    await self.client.disconnect()
+                except Exception:
+                    pass
+                self._target_entity = None
                 await asyncio.sleep(backoff)
 
         raise RuntimeError(f"Failed to upload {file_path.name} after {config.MAX_RETRIES} retries")

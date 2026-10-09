@@ -70,6 +70,23 @@ Examples:
         action="store_true",
         help="Delete each Takeout ZIP archive after all its contents are uploaded (saves disk)",
     )
+    parser.add_argument(
+        "--workers",
+        type=int,
+        default=2,
+        help="Number of concurrent media upload workers (default: 2)",
+    )
+    parser.add_argument(
+        "--max-gb",
+        type=float,
+        default=None,
+        help="Maximum total gigabytes to upload before stopping safely (e.g. 90 on VPS)",
+    )
+    parser.add_argument(
+        "--reverse",
+        action="store_true",
+        help="Process archives in reverse order (e.g. for concurrent execution from the opposite end)",
+    )
     args = parser.parse_args()
 
     if not args.dir and not args.urls and not args.gdrive:
@@ -79,14 +96,19 @@ Examples:
     config.validate_telegram_config()
     db = Database()
     archiver = TelegramArchiver()
-    pipeline = MigrationPipeline(db=db, archiver=archiver)
+    pipeline = MigrationPipeline(
+        db=db,
+        archiver=archiver,
+        workers=args.workers,
+        max_gb=args.max_gb,
+    )
 
     if args.dir:
         archives_dir = args.dir.resolve()
         if not archives_dir.exists():
             logger.error(f"Directory not found: {archives_dir}")
             sys.exit(1)
-        logger.info(f"Starting migration from directory: {archives_dir}")
+        logger.info(f"Starting migration from directory: {archives_dir} ({args.workers} workers)")
         await pipeline.run_from_directory(archives_dir, delete_after_upload=args.delete_after_upload)
 
     elif args.urls:
@@ -96,12 +118,21 @@ Examples:
             sys.exit(1)
         with open(urls_file, "r") as f:
             urls = [line.strip() for line in f if line.strip() and not line.startswith("#")]
-        logger.info(f"Starting sequential migration for {len(urls)} Takeout chunk URLs")
+        logger.info(f"Starting sequential migration for {len(urls)} Takeout chunk URLs ({args.workers} workers)")
         await pipeline.run_from_urls(urls)
 
     elif args.gdrive:
-        logger.info(f"Connecting to Google Drive to scan folder: '{args.gdrive_folder}' (prefix filter: '{args.prefix}')")
-        await pipeline.run_from_gdrive(folder_name=args.gdrive_folder, prefix=args.prefix)
+        order_str = "descending/reverse" if args.reverse else "ascending"
+        limit_str = f", session limit: {args.max_gb} GB" if args.max_gb else ""
+        logger.info(
+            f"Connecting to Google Drive to scan folder: '{args.gdrive_folder}' "
+            f"(prefix: '{args.prefix}', order: {order_str}, workers: {args.workers}{limit_str})"
+        )
+        await pipeline.run_from_gdrive(
+            folder_name=args.gdrive_folder,
+            prefix=args.prefix,
+            reverse=args.reverse,
+        )
 
     logger.info("Migration run finished.")
 

@@ -164,11 +164,17 @@ class Database:
 
     def find_item_by_sha256(self, sha256: str) -> Optional[Dict[str, Any]]:
         """Check if identical file content was already uploaded to avoid duplicates."""
+        prefix = (sha256[:16] + "...") if len(sha256) > 16 else sha256
         with self.get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT * FROM media_items WHERE sha256 = ? AND status IN ('UPLOADED', 'VERIFIED') LIMIT 1",
-                (sha256,),
+                """
+                SELECT * FROM media_items
+                WHERE (sha256 = ? OR sha256 = ? OR (length(sha256) >= 16 AND substr(sha256, 1, 16) = ?))
+                  AND status IN ('UPLOADED', 'VERIFIED')
+                LIMIT 1
+                """,
+                (sha256, prefix, sha256[:16]),
             )
             row = cursor.fetchone()
             return dict(row) if row else None

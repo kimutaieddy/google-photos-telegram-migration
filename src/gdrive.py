@@ -5,8 +5,12 @@ Google Drive integration: automated discovery and sequential downloading of Take
 import io
 import logging
 import os
+import socket
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable
+
+# Enforce socket timeout on all HTTP requests to prevent indefinite freezes
+socket.setdefaulttimeout(60.0)
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -169,17 +173,32 @@ class GoogleDriveManager:
 
         request = drive.files().get_media(fileId=file_id)
 
-        chunk_size = 10 * 1024 * 1024  # 10 MB download chunk
+        chunk_size = 5 * 1024 * 1024  # 5 MB download chunks
+        retries = 0
+        max_chunk_retries = 30
+
         with open(destination_path, "wb") as f_out:
             downloader = MediaIoBaseDownload(f_out, request, chunksize=chunk_size)
             done = False
             while not done:
-                status, done = downloader.next_chunk()
-                if status:
-                    curr = int(status.resumable_progress)
-                    total = int(status.total_size)
-                    if progress_callback:
-                        progress_callback(curr, total)
+                try:
+                    status, done = downloader.next_chunk()
+                    if status:
+                        curr = int(status.resumable_progress)
+                        total = int(status.total_size)
+                        retries = 0
+                        logger.info(f"Drive download {destination_path.name}: {curr / (1024*1024):.1f}/{total / (1024*1024):.1f} MB ({(curr/total)*100:.1f}%)")
+                        if progress_callback:
+                            progress_callback(curr, total)
+                except Exception as e:
+                    retries += 1
+                    if retries > max_chunk_retries:
+                        logger.error(f"Failed to download {destination_path.name} after {max_chunk_retries} chunk retries.")
+                        raise
+                    sleep_time = min(45, 5 + 2 * retries)
+                    logger.warning(f"Transient error downloading {destination_path.name}: {e}. Retrying chunk ({retries}/{max_chunk_retries}) in {sleep_time}s...")
+                    import time
+                    time.sleep(sleep_time)
 
         logger.info(f"Successfully downloaded Drive file to {destination_path.name}")
         return destination_path
