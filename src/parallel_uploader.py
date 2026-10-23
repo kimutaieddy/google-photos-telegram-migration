@@ -70,7 +70,7 @@ async def upload_file_parallel(
                             file_part=part_index,
                             bytes=chunk,
                         )
-                    res = await asyncio.wait_for(client(req), timeout=25.0)
+                    res = await asyncio.wait_for(client(req), timeout=60.0)
                     if res:
                         async with lock:
                             uploaded_bytes += length

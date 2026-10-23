@@ -64,4 +64,3 @@ python scripts/verify_archive.py --sample 10
 ```
 
 For complete architectural details, see [HANDOVER.md](file:///d:/scripts/Migration/HANDOVER.md).
-

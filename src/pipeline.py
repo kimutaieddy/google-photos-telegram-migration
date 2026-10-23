@@ -227,6 +227,10 @@ class MigrationPipeline:
                             )
                             self.stop_requested = True
 
+                    except asyncio.CancelledError:
+                        if self.stop_requested:
+                            break
+                        logger.warning(f"Worker task cancelled during {filename}.")
                     except Exception as e:
                         logger.error(f"Error processing {filename}: {e}", exc_info=True)
                         if item_id:

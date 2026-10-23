@@ -33,10 +33,34 @@ class TelegramArchiver:
             connection=ConnectionTcpIntermediate,
         )
         self._target_entity = None
+        self._connect_lock = asyncio.Lock()
 
     async def connect(self) -> None:
         """Start the Telethon client and resolve target channel entity."""
-        await asyncio.wait_for(self._do_connect(), timeout=35.0)
+        async with self._connect_lock:
+            await self._do_connect()
+
+    async def ensure_connected(self) -> None:
+        """Ensure client is connected under lock to avoid concurrent reconnection collisions."""
+        async with self._connect_lock:
+            if not self.client.is_connected() or not self._target_entity:
+                logger.info("Telethon disconnected; reconnecting...")
+                try:
+                    await self._do_connect()
+                except Exception as ce:
+                    logger.warning(f"Reconnection failed ({ce}), re-creating TelethonClient...")
+                    try:
+                        await self.client.disconnect()
+                    except Exception:
+                        pass
+                    from telethon.network import ConnectionTcpIntermediate
+                    self.client = TelegramClient(
+                        self.session,
+                        config.TELEGRAM_API_ID,
+                        config.TELEGRAM_API_HASH,
+                        connection=ConnectionTcpIntermediate,
+                    )
+                    await self._do_connect()
 
     async def _do_connect(self) -> None:
         if not self.client.is_connected():
@@ -56,8 +80,9 @@ class TelegramArchiver:
 
     async def disconnect(self) -> None:
         """Disconnect the Telethon client."""
-        if self.client.is_connected():
-            await self.client.disconnect()
+        async with self._connect_lock:
+            if self.client.is_connected():
+                await self.client.disconnect()
 
     async def send_status_message(self, text: str) -> Optional[int]:
         """Send an administrative or progress notification to the target channel."""
@@ -94,25 +119,8 @@ class TelegramArchiver:
 
         while retries < config.MAX_RETRIES:
             try:
-                # Ensure client is connected before attempting send
-                if not self.client.is_connected() or not self._target_entity:
-                    logger.info("Telethon disconnected; reconnecting...")
-                    try:
-                        await self.connect()
-                    except Exception as ce:
-                        logger.warning(f"Reconnection failed ({ce}), re-creating TelethonClient...")
-                        try:
-                            await self.client.disconnect()
-                        except Exception:
-                            pass
-                        from telethon.network import ConnectionTcpIntermediate
-                        self.client = TelegramClient(
-                            self.session,
-                            config.TELEGRAM_API_ID,
-                            config.TELEGRAM_API_HASH,
-                            connection=ConnectionTcpIntermediate,
-                        )
-                        await self.connect()
+                # Ensure client is connected under lock
+                await self.ensure_connected()
 
                 # Add organic jitter delay to prevent rate limit triggers
                 jitter = random.uniform(0.1, 0.6)

@@ -40,7 +40,12 @@ class Config:
         if not Path(_raw_data_dir).is_absolute()
         else Path(_raw_data_dir).resolve()
     )
-    TEMP_DIR: Path = DATA_DIR / "temp"
+    _raw_temp_dir = os.getenv("TEMP_DIR")
+    TEMP_DIR: Path = (
+        Path(_raw_temp_dir).resolve()
+        if _raw_temp_dir
+        else DATA_DIR / "temp"
+    )
     THUMBNAIL_DIR: Path = DATA_DIR / "thumbnails"
     DB_PATH: Path = DATA_DIR / "migration.db"
 
