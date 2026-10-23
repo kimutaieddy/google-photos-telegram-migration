@@ -11,10 +11,10 @@ on:
         description: "Optional upload limit for this run, in GB"
         required: false
         type: string
-      prefix:
-        description: "Takeout archive prefix to process"
+      archive_name:
+        description: "Exact Takeout archive name to process"
         required: false
-        default: "takeout-"
+        default: "takeout-20261008T145955Z-1-006.zip"
         type: string
       gdrive_folder:
         description: "Google Drive folder containing the Takeout archives"
@@ -92,11 +92,11 @@ jobs:
       - name: Run resumable migration
         env:
           MAX_GB: ${{ inputs.max_gb }}
-          PREFIX: ${{ inputs.prefix }}
+          ARCHIVE_NAME: ${{ inputs.archive_name }}
           GDRIVE_FOLDER: ${{ inputs.gdrive_folder }}
           REVERSE: ${{ inputs.reverse }}
         run: |
-          args=(--gdrive --gdrive-folder "$GDRIVE_FOLDER" --prefix "$PREFIX" --workers 4)
+          args=(--gdrive --gdrive-folder "$GDRIVE_FOLDER" --prefix "$ARCHIVE_NAME" --workers 2)
           if [ -n "$MAX_GB" ]; then
             args+=(--max-gb "$MAX_GB")
           fi
@@ -104,6 +104,11 @@ jobs:
             args+=(--reverse)
           fi
           python main.py "${args[@]}"
+
+      - name: Delete temporary downloaded archives
+        if: always()
+        run: |
+          find data/temp -maxdepth 1 -type f -name '*.zip' -delete
 
       - name: Print migration status
         if: always()
