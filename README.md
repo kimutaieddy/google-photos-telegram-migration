@@ -57,6 +57,33 @@ python main.py --dir ./data/takeout --delete-after-upload
 python main.py --urls ./data/takeout_urls.txt
 ```
 
+#### Option D: GitHub Actions runner
+
+The existing Google Drive mode can run on a GitHub-hosted runner without
+changing the migration engine. Enable the workflow at
+`.github/workflows/migrate.yml`, configure the required repository secrets,
+then start it from **Actions → Google Photos to Telegram migration → Run
+workflow**.
+
+Required secrets:
+
+* `TELEGRAM_API_ID`
+* `TELEGRAM_API_HASH`
+* `TELEGRAM_SESSION_STRING`
+* `TELEGRAM_CHANNEL_ID`
+* `GDRIVE_TOKEN_JSON` — the contents of the existing
+  `data/gdrive_token.json`, authorized for the Google account containing the
+  Takeout archives
+
+The first run leaves `previous_run_id` blank. Each successful run uploads the
+SQLite database as the `migration-state` artifact. For the next run, enter the
+previous successful workflow run ID in `previous_run_id` so the migration
+resumes rather than starting with an empty catalog. The `gdrive_folder` input
+defaults to `Takeout` and can be changed when the archives are stored in a
+different Drive folder. The workflow processes Google Drive archives
+sequentially and deletes only temporary runner files; it does not delete the
+Takeout files in Drive.
+
 ### 5. Monitor Status & Verify
 ```bash
 python scripts/status.py

@@ -64,63 +64,29 @@ def build_notebook() -> dict:
                 "migration code.\n"
             ),
             markdown(
-                "## 1. Mount Google Drive and upload the project bundle\n\n"
-                "Run this cell, then select `data/colab_bundle.zip` from the "
-                "project. The bundle contains source code only."
+                "## 1. Mount Google Drive and download the project source\n\n"
+                "The source is downloaded directly from GitHub, avoiding the "
+                "browser upload widget."
             ),
             code(
-                """from google.colab import drive, files
+                """from google.colab import drive
 from pathlib import Path
-import io
-import os
-import shutil
 import subprocess
 import sys
-import zipfile
-
-def run_with_retries(command, label, attempts=3):
-    for attempt in range(1, attempts + 1):
-        try:
-            subprocess.run(command, check=True)
-            return
-        except subprocess.CalledProcessError:
-            print(f'{label} failed on attempt {attempt}/{attempts}.')
-            if attempt == attempts:
-                raise
-            print('Retrying after a short pause...')
-            import time
-            time.sleep(5 * attempt)
 
 drive.mount('/content/drive')
-uploaded = files.upload()
-bundle_names = [name for name in uploaded if name.endswith('.zip')]
-if len(bundle_names) != 1:
-    raise ValueError('Upload exactly one .zip project bundle.')
-
-required_members = {'main.py', 'requirements.txt', 'src/config.py', 'scripts/status.py'}
-with zipfile.ZipFile(io.BytesIO(uploaded[bundle_names[0]])) as bundle:
-    missing = required_members - set(bundle.namelist())
-    if missing:
-        raise ValueError(
-            f'Invalid bundle; missing {sorted(missing)}. '
-            'Regenerate data/colab_bundle.zip and upload it again.'
-        )
-
 project_dir = Path('/content/Migration')
 if project_dir.exists():
-    shutil.rmtree(project_dir)
-project_dir.mkdir(parents=True)
-with zipfile.ZipFile(io.BytesIO(uploaded[bundle_names[0]])) as bundle:
-    bundle.extractall(project_dir)
-
-for required in ('main.py', 'requirements.txt', 'src', 'scripts/status.py'):
-    if not (project_dir / required).exists():
-        raise FileNotFoundError(f'Bundle extraction is incomplete: {project_dir / required}')
-
-run_with_retries([
+    subprocess.run(['rm', '-rf', str(project_dir)], check=True)
+subprocess.run([
+    'git', 'clone', '--depth', '1',
+    'https://github.com/kimutaieddy/google-photos-telegram-migration.git',
+    str(project_dir),
+], check=True)
+subprocess.run([
     sys.executable, '-m', 'pip', 'install', '-q', '-r',
     str(project_dir / 'requirements.txt'),
-], 'Dependency installation')
+], check=True)
 print(f'Project ready at {project_dir}')
 """
             ),

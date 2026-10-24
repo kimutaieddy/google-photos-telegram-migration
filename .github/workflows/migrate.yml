@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 name: Google Photos to Telegram migration
 
 on:
@@ -125,3 +126,132 @@ jobs:
             data/migration.db-shm
           if-no-files-found: error
           retention-days: 30
+=======
+name: Google Photos to Telegram migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      previous_run_id:
+        description: "Previous successful workflow run ID to resume from (leave blank for first run)"
+        required: false
+        type: string
+      max_gb:
+        description: "Optional upload limit for this run, in GB"
+        required: false
+        type: string
+      archive_name:
+        description: "Exact Takeout archive name to process"
+        required: false
+        default: "takeout-20261008T145955Z-1-006.zip"
+        type: string
+      gdrive_folder:
+        description: "Google Drive folder containing the Takeout archives"
+        required: false
+        default: "Takeout"
+        type: string
+      reverse:
+        description: "Process archives from newest to oldest"
+        required: false
+        default: false
+        type: boolean
+
+concurrency:
+  group: google-photos-telegram-migration
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 350
+    env:
+      TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+      TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+      TELEGRAM_SESSION_STRING: ${{ secrets.TELEGRAM_SESSION_STRING }}
+      TELEGRAM_CHANNEL_ID: ${{ secrets.TELEGRAM_CHANNEL_ID }}
+      DATA_DIR: data
+      TEMP_DIR: data/temp
+      MIN_DISK_FREE_MB: "1500"
+      LOG_LEVEL: INFO
+
+    steps:
+      - name: Check out migration code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Restore migration database
+        if: ${{ inputs.previous_run_id != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: migration-state
+          path: data
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          run-id: ${{ inputs.previous_run_id }}
+
+      - name: Configure Google Drive token
+        env:
+          GDRIVE_TOKEN_JSON: ${{ secrets.GDRIVE_TOKEN_JSON }}
+        run: |
+          test -n "$GDRIVE_TOKEN_JSON" || {
+            echo "::error::GDRIVE_TOKEN_JSON is not configured"
+            exit 1
+          }
+          mkdir -p data
+          printf '%s' "$GDRIVE_TOKEN_JSON" > data/gdrive_token.json
+
+      - name: Validate required secrets
+        run: |
+          test -n "$TELEGRAM_API_ID" || { echo "::error::TELEGRAM_API_ID is missing"; exit 1; }
+          test -n "$TELEGRAM_API_HASH" || { echo "::error::TELEGRAM_API_HASH is missing"; exit 1; }
+          test -n "$TELEGRAM_SESSION_STRING" || { echo "::error::TELEGRAM_SESSION_STRING is missing"; exit 1; }
+          test -n "$TELEGRAM_CHANNEL_ID" || { echo "::error::TELEGRAM_CHANNEL_ID is missing"; exit 1; }
+
+      - name: Run resumable migration
+        env:
+          MAX_GB: ${{ inputs.max_gb }}
+          ARCHIVE_NAME: ${{ inputs.archive_name }}
+          GDRIVE_FOLDER: ${{ inputs.gdrive_folder }}
+          REVERSE: ${{ inputs.reverse }}
+        run: |
+          args=(--gdrive --gdrive-folder "$GDRIVE_FOLDER" --prefix "$ARCHIVE_NAME" --workers 2)
+          if [ -n "$MAX_GB" ]; then
+            args+=(--max-gb "$MAX_GB")
+          fi
+          if [ "$REVERSE" = "true" ]; then
+            args+=(--reverse)
+          fi
+          python main.py "${args[@]}"
+
+      - name: Delete temporary downloaded archives
+        if: always()
+        run: |
+          find data/temp -maxdepth 1 -type f -name '*.zip' -delete
+
+      - name: Print migration status
+        if: always()
+        run: python scripts/status.py
+
+      - name: Save migration database
+        if: ${{ always() && hashFiles('data/migration.db') != '' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: migration-state
+          path: |
+            data/migration.db
+            data/migration.db-wal
+            data/migration.db-shm
+          if-no-files-found: error
+          retention-days: 30
+>>>>>>> c40b651 (Add Option B instructions and updated notebook/bundle)
